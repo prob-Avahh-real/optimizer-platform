@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>OptimizerPlatform</title>
+<style>
+:root{color-scheme:light;--bg:#f8f9fa;--card:#fff;--text:#1a1a2e;--sub:#6b7280;--accent:#6366f1;--green:#10b981;--red:#ef4444;--yellow:#f59e0b;--border:#e5e7eb;--shadow:0 1px 3px rgba(0,0,0,.08);--radius:12px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.app{max-width:1400px;margin:0 auto;padding:20px}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.header h1{font-size:1.5rem;font-weight:700;background:linear-gradient(135deg,var(--accent),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header-actions{display:flex;gap:8px;align-items:center}
+.btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:#5558e6;color:#fff}
+.btn-danger{border-color:var(--red);color:var(--red)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-sm{padding:4px 10px;font-size:.78rem}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.75rem;font-weight:600}
+.badge-green{background:#d1fae5;color:#065f46}.badge-yellow{background:#fef3c7;color:#92400e}.badge-red{background:#fee2e2;color:#991b1b}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-bottom:20px}
+.card{background:var(--card);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.card h3{font-size:.92rem;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.metric{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.85rem}
+.metric:last-child{border-bottom:none}
+.metric-val{font-weight:600;color:var(--accent)}
+.waste-big{font-size:2rem;font-weight:700;color:var(--red)}
+.score-circle{width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;margin:0 auto 10px}
+.score-A{background:#d1fae5;color:#065f46}.score-B{background:#dbeafe;color:#1e40af}
+.score-C{background:#fef3c7;color:#92400e}.score-D{background:#fee2e2;color:#991b1b}
+.loading-text{color:var(--sub);font-style:italic}
+.opt-actions{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+.banner{padding:10px 16px;border-radius:8px;margin-bottom:16px;font-size:.85rem;text-align:center}
+.banner-ok{background:#d1fae5;color:#065f46}.banner-err{background:#fee2e2;color:#991b1b}
+.toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:8px;color:#fff;font-size:.85rem;z-index:999;animation:fadeIn .3s}
+.toast-success{background:var(--green)}.toast-error{background:var(--red)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+pre{white-space:pre-wrap;font-size:.82rem;background:#f3f4f6;border-radius:8px;padding:12px;max-height:300px;overflow:auto}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="header">
+<div><h1>🖥 OptimizerPlatform</h1>
+<p style="color:var(--sub);font-size:.82rem">轻量版系统运维平台 · 5大模块 · 本地优先 · 无需云服务</p></div>
+<div class="header-actions">
+<span id="led" style="width:8px;height:8px;border-radius:50%;background:var(--yellow);display:inline-block"></span>
+<span id="led-text" style="font-size:.78rem;color:var(--sub)">检测中…</span>
+<button class="btn btn-primary" id="btn-scan-all" onclick="doScanAll()" disabled>🔍 全面扫描</button>
+<button class="btn btn-sm" onclick="doScanModule('network')">⚡ 快速检查</button>
+</div>
+</div>
+
+<div id="banner" class="banner banner-err"><span id="banner-text">🔌 等待连上服务器…</span></div>
+
+<div id="health" class="card" style="text-align:center;margin-bottom:20px">
+<h3>系统健康度</h3><div id="hc" class="score-circle score-A">--</div>
+<p id="hs" style="color:var(--sub)">点击「全面扫描」开始检测</p>
+</div>
+
+<div class="grid">
+<div class="card" id="c-asset"><h3>🖥 1. 资产发现</h3><div id="t-asset"><p class="loading-text">等待扫描...</p></div></div>
+<div class="card" id="c-network"><h3>🌐 2. 网络中心</h3><div id="t-network"><p class="loading-text">等待扫描...</p></div></div>
+<div class="card" id="c-storage"><h3>💾 3. 存储中心</h3><div id="t-storage"><p class="loading-text">等待扫描...</p></div></div>
+<div class="card" id="c-devops"><h3>🛠 4. DevOps 中心</h3><div id="t-devops"><p class="loading-text">等待扫描...</p></div></div>
+<div class="card" id="c-container"><h3>🐳 5. 容器中心</h3><div id="t-container"><p class="loading-text">等待扫描...</p></div></div>
+</div>
+
+<div class="grid" style="grid-template-columns:1fr 1fr">
+<div class="card"><h3>⚡ 性能基准</h3><div id="t-benchmark"><p class="loading-text">等待扫描...</p></div></div>
+<div class="card"><h3>🤖 AI 分析报告</h3><div id="t-ai_report"><p class="loading-text">等待扫描...</p></div></div>
+</div>
+
+<div class="card" style="margin-bottom:20px"><h3>🩺 自动修复建议</h3><div id="t-auto_heal"><p class="loading-text">等待扫描...</p></div></div>
+
+<div class="card" style="margin-bottom:20px"><h3>📋 优化执行结果</h3><div id="opt-result"><p class="loading-text">点击模块中的「预览优化」或「执行优化」</p></div></div>
+
+<div class="card"><h3>📦 备份记录 <button class="btn btn-sm" onclick="doBackups()" style="float:right">刷新</button></h3><div id="backup-list"><p class="loading-text">点击刷新查看</p></div></div>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────
+const SVR = 'http://127.0.0.1:8765';
+
+async function api(p, opts) {
+  const r = await fetch(SVR + p, opts || {});
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// ── Connection check ────────────────────────────
+async function checkConn() {
+  const b = document.getElementById('banner'), bt = document.getElementById('banner-text');
+  const led = document.getElementById('led'), lt = document.getElementById('led-text');
+  const btn = document.getElementById('btn-scan-all');
+  try {
+    await api('/api/health');
+    b.className = 'banner banner-ok';
+    bt.innerHTML = '✅ 已连接 · <code>http://127.0.0.1:8765</code>';
+    led.style.background = 'var(--green)'; lt.textContent = '就绪';
+    btn.disabled = false;
+    return true;
+  } catch (e) {
+    b.className = 'banner banner-err';
+    bt.innerHTML = '❌ 服务器未启动 · 请在终端运行: <code>cd ~/Desktop/optimizer-platform && pip3 install fastapi uvicorn && python3 optimizer/server.py</code>';
+    led.style.background = 'var(--red)'; lt.textContent = '脱机';
+    btn.disabled = true;
+    return false;
+  }
+}
+
+let connTimer = setInterval(async () => { if (await checkConn()) { clearInterval(connTimer); setTimeout(doScanAll, 400); } }, 3000);
+checkConn();
+
+// ── Helpers ─────────────────────────────────────
+function setStatus(s) {
+  const led = document.getElementById('led'), lt = document.getElementById('led-text');
+  if (s === 'scanning') { led.style.background = 'var(--yellow)'; lt.textContent = '扫描中…'; }
+  else if (s === 'done') { led.style.background = 'var(--green)'; lt.textContent = '就绪'; }
+  else { led.style.background = 'var(--red)'; lt.textContent = '错误'; }
+}
+function hSize(mb) {
+  if (Math.abs(mb) < 0.01) return '0 MB';
+  return mb >= 1024 ? (mb/1024).toFixed(1)+' GB' : mb.toFixed(1)+' MB';
+}
+function toast(m, e) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (e ? 'toast-error' : 'toast-success');
+  t.textContent = m; document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ── Scan ────────────────────────────────────────
+async function doScanAll() {
+  setStatus('scanning');
+  try {
+    const data = await api('/api/scan?force=true');
+    for (const [k, v] of Object.entries(data)) render(k, v);
+    setStatus('done'); toast('✅ 扫描完成');
+  } catch (e) { setStatus('error'); toast('扫描失败: ' + e.message, true); }
+}
+
+async function doScanModule(m) {
+  setStatus('scanning');
+  try { render(m, await api('/api/scan/' + m + '?force=true')); setStatus('done'); }
+  catch (e) { setStatus('error'); toast(m + ' 失败: ' + e.message, true); }
+}
+
+// ── Render all modules ──────────────────────────
+function render(key, val) {
+  const d = val.data || val;
+  const el = document.getElementById('t-' + key);
+  if (!el) return;
+  let h = '';
+
+  if (key === 'asset') {
+    h += `<div class="metric"><span>主机</span><span class="metric-val">${d.hostname||'?'}</span></div>`;
+    h += `<div class="metric"><span>系统</span><span class="metric-val">${d.system} ${d.release} / ${d.machine}</span></div>`;
+    h += `<div class="metric"><span>CPU</span><span class="metric-val">${(d.cpu||{}).brand||'?'} (${(d.cpu||{}).cores||'?'}核)</span></div>`;
+    h += `<div class="metric"><span>内存</span><span class="metric-val">${(d.memory||{}).total_gb||'?'} GB</span></div>`;
+    h += `<div class="metric"><span>GPU</span><span class="metric-val">${(d.gpu||[]).join(', ')||'?'}</span></div>`;
+    for (const dk of d.disk||[]) {
+      if (dk.size_gb) h += `<div class="metric"><span>磁盘 ${dk.mount}</span><span class="metric-val">${dk.size_gb}GB (可用${dk.free_gb}GB)</span></div>`;
+      else h += `<div class="metric"><span>磁盘 ${dk.mount||'?'}</span><span class="metric-val">${dk.size||dk.avail||'?'}</span></div>`;
+    }
+    h += `<div class="metric"><span>Docker</span><span class="metric-val">${d.docker?'✅':'❌'}</span></div>`;
+    h += `<div class="metric"><span>K8s</span><span class="metric-val">${d.kubentes?'✅':'❌'}</span></div>`;
+    h += `<div class="metric"><span>数据库</span><span class="metric-val">${(d.databases||[]).join(', ')||'无'}</span></div>`;
+    h += `<div class="metric"><span>开发工具</span><span class="metric-val" style="font-size:.75rem">${(d.dev_tools||[]).join(', ')||'未检测'}</span></div>`;
+  }
+
+  else if (key === 'network') {
+    const rec = d.recommendation || {}, score = rec.score ?? 100;
+    h += `<div class="metric"><span>评分</span><span class="badge ${score>=90?'badge-green':score>=70?'badge-yellow':'badge-red'}">${score}/100</span></div>`;
+    h += `<div class="metric"><span>延迟</span><span class="metric-val">${(d.ping||{}).avg_ms??'?'} ms</span></div>`;
+    const f = (d.dns_speed||{}).fastest || {};
+    h += `<div class="metric"><span>最快DNS</span><span class="metric-val">${f.provider||'?'} (${f.avg_ms||'?'}ms)</span></div>`;
+    h += `<div class="metric"><span>丢包</span><span class="metric-val">${(d.packet_loss||{}).loss_pct??'?'}%</span></div>`;
+    h += `<div class="metric"><span>公网IP</span><span class="metric-val">${d.public_ip||'?'}</span></div>`;
+    for (const p of (d.open_ports||{}).ports||[]) h += `<div class="metric"><span>  → ${p.port}/tcp</span><span class="metric-val">${p.service}</span></div>`;
+    for (const r of rec.recommendations||[]) h += `<div class="metric" style="color:var(--red)"><span>⚠ ${r.issue}</span><span>${r.action}</span></div>`;
+    el.innerHTML = h; addBtns('network',['dns']); return;
+  }
+
+  else if (key === 'storage') {
+    const w = d.waste_estimate || {}, du = d.disk_usage || {}, dup = d.duplicate_files || {};
+    h += `<div class="metric"><span>磁盘</span><span class="metric-val">${du.used_pct||'?'}% (可用${du.free_gb||'?'}GB)</span></div>`;
+    h += `<div style="text-align:center;margin:10px 0"><span class="waste-big">${w.total_reclaimable_gb||0} GB</span><br><span style="font-size:.78rem;color:var(--sub)">可回收空间</span></div>`;
+    h += `<div class="metric"><span>缓存浪费</span><span class="metric-val">${w.cache_waste_gb||0} GB</span></div>`;
+    h += `<div class="metric"><span>重复浪费</span><span class="metric-val">${w.duplicate_waste_gb||0} GB</span></div>`;
+    h += `<div class="metric"><span>重复组</span><span class="metric-val">${dup.total_groups||0}组</span></div>`;
+    h += `<div class="metric"><span>大文件</span><span class="metric-val">${(d.large_files||[]).length}个</span></div>`;
+    h += `<div class="metric"><span>空目录</span><span class="metric-val">${w.empty_dirs||0}个</span></div>`;
+    el.innerHTML = h; addBtns('storage',['empty_dirs','logs','cache']); return;
+  }
+
+  else if (key === 'devops') {
+    h += `<div class="metric"><span>总缓存</span><span class="metric-val" style="color:var(--red)">${hSize(d.total_cache_mb||0)}</span></div>`;
+    for (const [t,s] of Object.entries(d.detected_tools||{}).sort((a,b)=>b[1]-a[1])) {
+      if (s > 0.1) h += `<div class="metric"><span>${t}</span><span class="metric-val">${hSize(s)}</span></div>`;
+    }
+    for (const r of (d.recommendations||[]).slice(0,3)) h += `<div class="metric"><span>🧹 ${r.tool}</span><span class="metric-val" style="font-size:.75rem">${r.clean_command||'手动'}</span></div>`;
+    el.innerHTML = h; addBtns('devops',['npm','pip','cargo','go','docker','gradle']); return;
+  }
+
+  else if (key === 'container') {
+    if (!d.docker_available) { h = '<p style="color:var(--sub)">🐳 Docker 未安装或未运行</p>'; }
+    else {
+      const img=d.images||{}, ctn=d.containers||{}, vol=d.volumes||{}, orph=d.orphans||{}, recl=d.reclaimable||{};
+      h+=`<div class="metric"><span>镜像</span><span class="metric-val">${img.count||0}个 (${img.total_size_gb||0}GB)</span></div>`;
+      h+=`<div class="metric"><span>悬空</span><span class="metric-val" style="color:var(--red)">${img.dangling||0}</span></div>`;
+      h+=`<div class="metric"><span>容器</span><span class="metric-val">运行${ctn.running||0}/停${ctn.stopped||0}</span></div>`;
+      h+=`<div class="metric"><span>Volume</span><span class="metric-val">${vol.count||0}个(孤儿${vol.orphans||0})</span></div>`;
+      h+=`<div style="text-align:center;margin:10px 0"><span class="waste-big">${recl.total_reclaimable_gb||0}GB</span><br><span style="font-size:.78rem;color:var(--sub)">可回收</span></div>`;
+    }
+    el.innerHTML = h; if (d.docker_available) addBtns('container',['containers','images','volumes']); return;
+  }
+
+  else if (key === 'benchmark') {
+    const s = d.summary || {}, cls = s.combined_score>=800?'A':s.combined_score>=600?'B':s.combined_score>=400?'C':'D';
+    h += `<div style="text-align:center"><div class="score-circle score-${cls}">${s.combined_score||'?'}</div><p style="font-size:.78rem;color:var(--sub)">${s.grade||'?'}</p></div>`;
+    h += `<div class="metric"><span>CPU</span><span class="metric-val">${s.cpu_score||'?'}</span></div>`;
+    h += `<div class="metric"><span>磁盘</span><span class="metric-val">${s.disk_score||'?'}</span></div>`;
+    h += `<div class="metric"><span>网络</span><span class="metric-val">${s.network_score||'?'}</span></div>`;
+    h += `<div class="metric"><span>R/W</span><span class="metric-val">${(d.disk||{}).read_mbps||'?'} / ${(d.disk||{}).write_mbps||'?'} MB/s</span></div>`;
+  }
+
+  else if (key === 'ai_report') {
+    const s = d.health_score ?? 100, cls = s>=90?'A':s>=70?'B':s>=50?'C':'D';
+    document.getElementById('hc').textContent = s;
+    document.getElementById('hc').className = 'score-circle score-' + cls;
+    document.getElementById('hs').textContent = d.status || '?';
+    h += `<p><strong>评分:</strong> ${s}/100 | <strong>状态:</strong> ${d.status||'?'}</p>`;
+    for (const w of d.wins||[]) h += `<p style="color:var(--green)">✅ ${w}</p>`;
+    for (const i of d.issues||[]) h += `<p style="color:var(--red)">🔴 ${i}</p>`;
+    for (const s of (d.suggestions||[]).slice(0,5)) h += `<p style="color:var(--accent)">💡 ${s}</p>`;
+  }
+
+  else if (key === 'auto_heal') {
+    const rules = d.triggered_rules || [];
+    h = rules.length === 0
+      ? '<p style="color:var(--green)">✅ 未触发自动修复规则</p>'
+      : `<p>触发 <strong>${rules.length}</strong> 条:</p>` + rules.map(r => `<div class="metric"><span>⚠ ${r.description}</span><span class="badge badge-yellow">需确认</span></div>`).join('');
+  }
+
+  el.innerHTML = h;
+}
+
+// ── Optimize buttons ────────────────────────────
+function addBtns(mod, tgts) {
+  const card = document.getElementById('c-' + mod);
+  if (!card) return;
+  const old = card.querySelector('.opt-actions');
+  if (old) old.remove();
+  const div = document.createElement('div');
+  div.className = 'opt-actions';
+  div.innerHTML = `
+    <button class="btn btn-sm" onclick="doPreview('${mod}','${tgts.join(',')}')">🔍 预览</button>
+    <button class="btn btn-sm btn-primary" onclick="doOptimize('${mod}','${tgts.join(',')}')">⚡ 执行</button>
+    <button class="btn btn-sm" onclick="doRollback('${mod}')">↩ 回滚</button>`;
+  card.appendChild(div);
+}
+
+async function doOptimize(m, t) {
+  if (!confirm('⚠ 确认对 ' + m + ' 执行优化?\n\n目标: ' + t + '\n\n这会修改系统配置或删除文件。')) return;
+  setStatus('scanning');
+  try {
+    const d = await api('/api/optimize/' + m + '?targets=' + encodeURIComponent(t), {method:'POST'});
+    showResult(m, d); setStatus('done');
+    toast((d.total_freed_mb||0) > 1 ? '✅ 释放 ' + hSize(d.total_freed_mb||0) : '✅ 完成');
+    setTimeout(() => doScanModule(m), 800);
+  } catch (e) { setStatus('error'); toast(e.message, true); }
+}
+
+async function doPreview(m, t) {
+  try {
+    const d = await api('/api/optimize/' + m + '?dry_run=true&targets=' + encodeURIComponent(t), {method:'POST'});
+    showResult(m, d); toast('🔍 预览完成 — 未实际执行');
+  } catch (e) { toast(e.message, true); }
+}
+
+async function doRollback(m) {
+  if (!confirm('确认回滚 ' + m + '?')) return;
+  try {
+    await api('/api/rollback/' + m, {method:'POST'});
+    toast('✅ ' + m + ' 已回滚'); doScanModule(m);
+  } catch (e) { toast(e.message, true); }
+}
+
+function showResult(m, d) {
+  const el = document.getElementById('opt-result');
+  let h = `<p><strong>${m}</strong> — ${d.status==='dry_run'?'🔍 预览':'⚡ 已执行'} | backup: ${d.backup_id||'N/A'}</p>`;
+  for (const a of d.actions||[]) {
+    const icon = (a.result||'').includes('error') ? '❌' : (a.result||'').includes('dry_run') ? '🔍' : '✅';
+    h += `<div class="metric"><span>${icon} ${a.item}</span><span class="metric-val">${hSize(a.freed_mb||0)}</span></div>`;
+  }
+  if ((d.total_freed_mb||0) > 0) h += `<div style="text-align:center;margin-top:8px;font-weight:700;color:var(--accent)">总计: ${hSize(d.total_freed_mb||0)}</div>`;
+  el.innerHTML = h;
+}
+
+async function doBackups() {
+  try {
+    const data = await api('/api/backups/all');
+    const bs = data.backups || [];
+    const el = document.getElementById('backup-list');
+    el.innerHTML = bs.length
+      ? bs.slice(0,15).map(b => `<div class="metric"><span>${b.time||b.backup_id}</span><span style="color:${b.rolled_back?'var(--red)':'var(--green)'};font-size:.75rem">${b.module||'?'} ${b.rolled_back?'←已回滚':'✓'}</span></div>`).join('')
+      : '<p class="loading-text">无记录</p>';
+  } catch (e) {}
+}
+</script>
+</body>
+</html>
